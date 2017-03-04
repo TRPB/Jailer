@@ -1,0 +1,140 @@
+#!/usr/bin/env php
+<?php
+
+class Jailer {
+	private $dir;
+
+	public function __construct($dir) {
+		$this->dir = $dir;
+	}
+
+	public function init() {
+		$this->mkdir('/etc/');
+		copy('/etc/passwd', $this->dir . '/etc/passwd');
+		copy('/etc/group', $this->dir . '/etc/group');
+		$this->mkdir('/dev/');
+		$this->exec('mknod -m 666 ' . $this->dir . '/dev/null c 1 3');
+		$this->exec('mknod -m 666 ' . $this->dir . '/dev/tty c 5 0');
+		$this->exec('mknod -m 666 ' . $this->dir . '/dev/zero c 1 5');
+		$this->exec('mknod -m 666 ' . $this->dir . '/dev/random c 1 8');
+		chown($this->dir, 'root');
+		chgrp($this->dir, 'root');
+		$this->allow('bash');
+	}
+
+	private function exec($command) {
+		//Exec command and redirect stderr to stdout
+		exec($command . ' 2>&1', $output);
+		return isset($output[0]) ? $output[0] : '';
+	}
+
+	private function mkdir($dir, $owner = null, $mode = 0755, $recursive = true) {
+		if (!is_dir($this->dir . '/' . $dir))  mkdir($this->dir . '/' . $dir, $mode, $recursive);
+		if ($owner) chown($this->dir . '/' . $dir, $owner);
+	}
+
+
+	public function allow($program) {
+		if ($program == 'fstools') {
+			$tools = ['ls', 'rm', 'mv', 'cp', 'find'];
+			$output = '';
+			foreach ($tools as $tool) {
+				$output .= $this->allow($tool) . "\n";
+			}
+			return $output;
+		}
+		$which = $this->exec('which ' . $program);
+
+		if (strpos($which, ' no ')) {
+        	return 'Program ' . $program . 'not found';
+		}
+
+		//Move /bin to /usr/bin as /bin isn't in the user's path by default
+		$target = (strpos($which, '/bin') !== false) ? '/usr' . $which : $which;
+
+		$this->mkdir(dirname($target));
+		copy($which, $this->dir . $target);
+
+		chmod($this->dir . $target, 0755);
+
+		exec('ldd ' . $which . ' 2>&1', $ldd);
+
+		foreach ($ldd as $link) {
+		        preg_match('/\=\> ([^\(]+) \(/', $link, $matches);
+
+		        if (!empty($matches)) {
+		                $linkDir = dirname($matches[1]);
+		                if (!is_dir($this->dir . $linkDir))   $this->mkdir($linkDir, 'root', 0644, true);
+		                copy($matches[1], $this->dir . $matches[1]);
+		        }
+		}
+
+		return $program . ' added to chroot jail';
+	}
+
+
+	private function userExists($user) {
+		$output = $this->exec('grep ' . $user . ' /etc/passwd');
+		return !empty($output);
+
+	}
+	public function user($name) {
+		if (!$this->userExists($name)) {
+			echo 'User ' . $name . ' does not exist. Please add the user with `useradd` before adding them to this jail';
+			return;
+		}
+		$this->mkdir('/home/' . $name, $name);
+		chown($this->dir . '/home/' . $name, $name);
+		copy('/etc/passwd', $this->dir . '/etc/passwd');
+		copy('/etc/group', $this->dir . '/etc/group');
+
+		return 'User added to chroot environment, you will still need to manually add the following to /etc/ssh/sshd_config and restart the service:' . "\n\n" .
+				'Match User ' . $name . "\n\t" . 'ChrootDirectory' . $this->dir;
+	}
+}
+
+
+if (count($argv) < 2) {
+        echo 'Usage:' . "\n";
+        echo "	jailer init -- create a jail in the current directory\n\n";
+        echo "	jailer user [name] -- give the user [name] a home directory in the jail. This user must exist.\n\n";
+        echo "	jailer allow [program] -- allow jailed users to run [program]\n\n";
+}
+else {
+	$jailer = new Jailer(getcwd());
+
+	$args = $argv;
+
+	$command = array_shift($args);
+	$operation = array_shift($args);
+
+	if (is_callable([$jailer, $operation])) {
+		echo $jailer->{$operation}(...$args) . "\n";
+	}
+	else echo 'Invalid option ' . $option;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
