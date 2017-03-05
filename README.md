@@ -10,7 +10,7 @@ A tool for quickly creating SSH Chroot Jails.
 Run the following with root privileges:
 
 ```
-wget -O /usr/bin/jailer https://github.com/TomBZombie/Jailer/blob/master/jailer
+wget -O /usr/bin/jailer https://raw.githubusercontent.com/TomBZombie/Jailer/master/jailer
 chmod +x /usr/bin/jailer
 
 ```
