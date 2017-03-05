@@ -46,11 +46,11 @@ class Jailer {
 		$which = $this->exec('which ' . $program);
 
 		if (strpos($which, ' no ')) {
-        	return 'Program ' . $program . 'not found';
+        	return 'Program ' . $program . ' not found';
 		}
 
 		//Move /bin to /usr/bin as /bin isn't in the user's path by default
-		$target = (strpos($which, '/bin') !== false) ? '/usr' . $which : $which;
+		$target = (strpos($which, '/bin') === 0) ? '/usr' . $which : $which;
 
 		$this->mkdir(dirname($target));
 		copy($which, $this->dir . $target);
